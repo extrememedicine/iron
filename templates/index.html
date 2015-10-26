@@ -5,7 +5,15 @@
   </head>
   <body>
     {{range $message := .Messages}}
-    <h1>{{ $message.ID}}</h1>
+    <p>
+      {{ $message.To}}
+      </br>
+      {{ $message.From}}
+      </br>
+      {{ $message.Body}}
+      </br>
+      </br>
+    </p>
     {{end}}
   </body>
 </html>
