@@ -3,33 +3,91 @@ package main
 import (
 	"log"
 	"net/http"
+	"text/template"
+	"time"
 
 	"github.com/bmizerany/pat"
+	"github.com/gocql/gocql"
 )
 
-type sms struct {
-	to      string
-	from    string
-	message string
-}
+var (
+	templates *template.Template
+	cluster   *gocql.ClusterConfig
+)
 
-func nexmoWebhook(w http.ResponseWriter, r *http.Request) {
+func nexmo(w http.ResponseWriter, r *http.Request) {
 
-	msg := sms{
-		r.FormValue("to"),
-		r.FormValue("msisdn"),
-		r.FormValue("text"),
+	err := r.ParseForm()
+	if err != nil {
+		log.Println(err)
+		return
 	}
 
-	log.Println(msg)
+	if r.Form.Get("type") != "text" {
+		log.Println("Invalid message type")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("ERROR"))
+		return
+	}
+
+	// YYYY-MM-DD HH:MM:SS
+	timestamp, err := time.Parse("2006-01-02 15:04:05", r.Form.Get("message-timestamp"))
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("ERROR"))
+		return
+	}
+
+	session, err := cluster.CreateSession()
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("ERROR"))
+		return
+	}
+
+	defer session.Close()
+
+	err = session.Query(`INSERT INTO messages (id, receiver, sender, body, time) VALUES (?, ?, ?, ?, ?)`, gocql.TimeUUID(), r.Form.Get("to"), r.Form.Get("msisdn"), r.Form.Get("text"), timestamp.UTC()).Exec()
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("ERROR"))
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+
+}
+
+func dashboard(w http.ResponseWriter, r *http.Request) {
+
+	err := templates.ExecuteTemplate(w, "index.html", nil)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("ERROR"))
+	}
 
 }
 
 func main() {
 
+	var err error
+
+	templates, err = template.ParseGlob("templates/*")
+	if err != nil {
+		panic(err)
+	}
+
+	cluster = gocql.NewCluster("127.0.0.1")
+	cluster.Keyspace = "iron"
+
 	router := pat.New()
 
-	router.Post("/hooks/nexmo", http.HandlerFunc(nexmoWebhook))
+	router.Get("/hooks/nexmo", http.HandlerFunc(nexmo))
+	router.Get("/", http.HandlerFunc(dashboard))
 
 	log.Fatal(http.ListenAndServe(":8080", router))
 
