@@ -4,6 +4,8 @@
     <title>iron | dashboard</title>
   </head>
   <body>
-    <h1>Hello World!</h1>
+    {{range $message := .Messages}}
+    <h1>{{ $message.ID}}</h1>
+    {{end}}
   </body>
 </html>
