@@ -27,5 +27,5 @@ go install github.com/extrememedicine/iron
  
 ---
  
-[node.js]:http://golang.org
+[go]:http://golang.org
 [git]:http://git-scm.com
